@@ -1,78 +1,75 @@
 #include <pybind11/embed.h>
 #include <pybind11/stl.h>
 #include "runtime_context.h"
-#include "actuarial_functions.h"
 
 namespace py = pybind11;
 
-static ProjectionContext& ctx() {
-    return active_ctx();
-}
-
 PYBIND11_EMBEDDED_MODULE(actuarial, m) {
-    m.doc() = "Actuarial projection library (thread_local approach) — "
-              "functions that operate on live C++ state";
+    m.doc() = "Actuarial projection library — per-script submodules "
+              "with read-only inputs and write-only outputs";
 
-    // ── READ-ONLY inputs (get only — no setters) ────────────────────
+    // ═════════════════════════════════════════════════════════════════
+    // actuarial.mortality — mortality script inputs/outputs
+    // ═════════════════════════════════════════════════════════════════
+    auto mort = m.def_submodule("mortality", "Mortality assumption script");
 
-    m.def("get_policy_id",   []() { return ctx().policy_id; },
-          "Current policy ID");
-    m.def("get_scenario_id", []() { return ctx().scenario_id; },
-          "Current scenario ID");
-    m.def("get_month",       []() { return ctx().month; },
-          "Current projection month (1-based)");
-    m.def("get_face_amount", []() { return ctx().face_amount; });
-    m.def("get_premium",     []() { return ctx().premium; });
-    m.def("get_issue_age",   []() { return ctx().issue_age; });
-    m.def("get_policy_term", []() { return ctx().policy_term_years; },
-          "Policy term in years");
-    m.def("get_interest_rate", []() { return ctx().interest_rate; });
-    m.def("get_account_value", []() { return ctx().account_value; });
-    m.def("get_death_benefit", []() { return ctx().death_benefit; });
-    m.def("get_mortality_rate", []() { return ctx().mortality_rate; });
+    // READ-ONLY inputs
+    mort.def("get_issue_age",    []() { return active_mortality().issue_age; });
+    mort.def("get_attained_age", []() { return active_mortality().attained_age; });
+    mort.def("get_month",        []() { return active_mortality().month; });
+    mort.def("get_gender",       []() { return active_mortality().gender; },
+             "0=male, 1=female");
+    mort.def("get_smoker_status",[]() { return active_mortality().smoker_status; },
+             "0=non-smoker, 1=smoker");
+    mort.def("get_face_amount",  []() { return active_mortality().face_amount; });
 
-    // ── WRITE-ONLY outputs (set only — no getters) ──────────────────
+    // WRITE-ONLY outputs
+    mort.def("set_qx",
+             [](double v) { active_mortality().qx = v; },
+             py::arg("value"), "Annual mortality rate");
+    mort.def("set_qx_monthly",
+             [](double v) { active_mortality().qx_monthly = v; },
+             py::arg("value"), "Monthly mortality rate");
 
-    m.def("set_reserve", [](double v) { ctx().reserve = v; },
-          py::arg("value"),
-          "Set the reserve (output consumed by C++ after hook)");
+    // ═════════════════════════════════════════════════════════════════
+    // actuarial.lapse — lapse script inputs/outputs
+    // ═════════════════════════════════════════════════════════════════
+    auto lapse = m.def_submodule("lapse", "Lapse assumption script");
 
-    m.def("set_user_var",
-          [](const std::string& key, double val) {
-              ctx().user_vars[key] = val;
-          },
-          py::arg("key"), py::arg("value"),
-          "Write a named user variable (output consumed by C++ after hook)");
+    // READ-ONLY inputs
+    lapse.def("get_month",        []() { return active_lapse().month; });
+    lapse.def("get_policy_year",  []() { return active_lapse().policy_year; });
+    lapse.def("get_premium",      []() { return active_lapse().premium; });
+    lapse.def("get_account_value",[]() { return active_lapse().account_value; });
+    lapse.def("get_surrender_value",
+              []() { return active_lapse().surrender_value; });
+    lapse.def("get_surrender_charge_pct",
+              []() { return active_lapse().surrender_charge_pct; });
 
-    // ── Actuarial computation functions ──────────────────────────────
+    // WRITE-ONLY outputs
+    lapse.def("set_lapse_rate",
+              [](double v) { active_lapse().lapse_rate = v; },
+              py::arg("value"), "Annual lapse rate");
+    lapse.def("set_lapse_rate_monthly",
+              [](double v) { active_lapse().lapse_rate_monthly = v; },
+              py::arg("value"), "Monthly lapse rate");
 
-    m.def("pv_factor",
-          [](int n_months) {
-              return actuarial_funcs::pv_factor(ctx(), n_months);
-          },
-          py::arg("n_months"),
-          "Present value of $1 discounted for n months at the current rate");
+    // ═════════════════════════════════════════════════════════════════
+    // actuarial.eia_credit — EIA credited rate script inputs/outputs
+    // ═════════════════════════════════════════════════════════════════
+    auto eia = m.def_submodule("eia_credit",
+                               "EIA credited rate assumption script");
 
-    m.def("net_amount_at_risk",
-          []() { return actuarial_funcs::net_amount_at_risk(ctx()); },
-          "Death benefit minus reserve (floored at 0)");
+    // READ-ONLY inputs
+    eia.def("get_month",              []() { return active_eia_credit().month; });
+    eia.def("get_index_return",       []() { return active_eia_credit().index_return; });
+    eia.def("get_participation_rate", []() { return active_eia_credit().participation_rate; });
+    eia.def("get_cap_rate",           []() { return active_eia_credit().cap_rate; });
+    eia.def("get_floor_rate",         []() { return active_eia_credit().floor_rate; });
+    eia.def("get_spread",             []() { return active_eia_credit().spread; });
 
-    m.def("cost_of_insurance",
-          []() { return actuarial_funcs::cost_of_insurance(ctx()); },
-          "NAR * monthly mortality rate");
-
-    m.def("annuity_due_factor",
-          [](int n_months) {
-              return actuarial_funcs::annuity_due_factor(ctx(), n_months);
-          },
-          py::arg("n_months"),
-          "Annuity-due factor for n monthly periods at the current rate");
-
-    m.def("remaining_months",
-          []() { return actuarial_funcs::remaining_months(ctx()); },
-          "Months left until policy maturity");
-
-    m.def("surrender_value",
-          []() { return actuarial_funcs::surrender_value(ctx()); },
-          "Account value minus graded surrender charge");
+    // WRITE-ONLY outputs
+    eia.def("set_credited_rate",
+            [](double v) { active_eia_credit().credited_rate = v; },
+            py::arg("value"), "Final credited rate applied to the account");
 }

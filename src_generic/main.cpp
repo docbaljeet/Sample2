@@ -1,6 +1,8 @@
 #include <pybind11/embed.h>
 #include <iostream>
+#include <cmath>
 #include "projection_engine.h"
+#include "script_registry.h"
 
 namespace py = pybind11;
 
@@ -9,6 +11,22 @@ int main() {
 
     py::module_::import("sys").attr("path")
         .cast<py::list>().append(".");
+
+    // ── Show auto-generated functions per submodule ───────────────────
+    std::cout << "=== Auto-generated bindings from registry ===\n\n";
+    auto actuarial = py::module_::import("actuarial");
+    for (const auto& script : get_script_registry()) {
+        auto sub = actuarial.attr(script.name.c_str());
+        auto dir_list = py::module_::import("builtins")
+                            .attr("dir")(sub);
+        std::cout << "  actuarial." << script.name << ":\n";
+        for (auto item : dir_list) {
+            std::string name = item.cast<std::string>();
+            if (name.rfind("get_", 0) == 0 || name.rfind("set_", 0) == 0)
+                std::cout << "    " << name << "()\n";
+        }
+        std::cout << "\n";
+    }
 
     // ── Load each script ────────────────────────────────────────────
     ScriptHooks hooks;
@@ -31,9 +49,10 @@ int main() {
         return py::none();
     };
 
-    auto py_mortality  = load_hook("mortality_script",  "calc");
-    auto py_lapse      = load_hook("lapse_script",      "calc");
-    auto py_eia_credit = load_hook("eia_credit_script", "calc");
+    // Reuse the same vectorized Python scripts — the API is identical
+    auto py_mortality  = load_hook("mortality_script_vec",  "calc");
+    auto py_lapse      = load_hook("lapse_script_vec",      "calc");
+    auto py_eia_credit = load_hook("eia_credit_script_vec", "calc");
 
     if (!py_mortality.is_none())
         hooks.mortality  = [&]() { py_mortality(); };
@@ -44,19 +63,22 @@ int main() {
 
     // ── Set up model points ─────────────────────────────────────────
     ProjectionEngine engine;
-    //                      id  face     prem   age term gender smoker
+
     engine.add_policy({1, 100000.0, 500.0,  35, 20, 0, 0});
     engine.add_policy({2, 250000.0, 1200.0, 45, 30, 1, 0});
 
-    //                       id  rate  participation cap   floor spread
-    engine.add_scenario({1, 0.04, 0.80, 0.10, 0.00, 0.02});
-    engine.add_scenario({2, 0.06, 0.90, 0.12, 0.01, 0.015});
+    // Generate fake monthly index returns for 12 months
+    int projection_months = 12;
+    std::vector<double> idx_returns(projection_months);
+    for (int i = 0; i < projection_months; ++i)
+        idx_returns[i] = 0.005 + 0.003 * std::sin(i * 0.5);
+
+    engine.add_scenario({1, 0.80, 0.10, 0.00, 0.02, idx_returns});
+    engine.add_scenario({2, 0.90, 0.12, 0.01, 0.015, idx_returns});
 
     // ── Run projection ──────────────────────────────────────────────
-    int projection_months = 12;
-
-    std::cout << "\n=== Running projection (" << projection_months
-              << " months) ===\n\n";
+    std::cout << "\n=== Running projection — generic data-driven bindings ("
+              << projection_months << " months) ===\n\n";
 
     engine.run(projection_months, hooks);
 

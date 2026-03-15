@@ -1,0 +1,36 @@
+{
+    "scripts": [
+        {
+            "name": "mortality",
+            "vars": [
+                {"name": "projection_months", "type": "int",    "direction": "input"},
+                {"name": "issue_age",         "type": "int",    "direction": "input"},
+                {"name": "gender",            "type": "int",    "direction": "input"},
+                {"name": "smoker_status",     "type": "int",    "direction": "input"},
+                {"name": "face_amount",       "type": "double", "direction": "input"},
+                {"name": "qx_monthly",        "type": "vector", "direction": "output"}
+            ]
+        },
+        {
+            "name": "lapse",
+            "vars": [
+                {"name": "projection_months",  "type": "int",    "direction": "input"},
+                {"name": "policy_term_years",  "type": "int",    "direction": "input"},
+                {"name": "premium",            "type": "double", "direction": "input"},
+                {"name": "lapse_rate_monthly", "type": "vector", "direction": "output"}
+            ]
+        },
+        {
+            "name": "eia_credit",
+            "vars": [
+                {"name": "projection_months",  "type": "int",    "direction": "input"},
+                {"name": "participation_rate", "type": "double", "direction": "input"},
+                {"name": "cap_rate",           "type": "double", "direction": "input"},
+                {"name": "floor_rate",         "type": "double", "direction": "input"},
+                {"name": "spread",             "type": "double", "direction": "input"},
+                {"name": "index_returns",      "type": "vector", "direction": "input"},
+                {"name": "credited_rate",      "type": "vector", "direction": "output"}
+            ]
+        }
+    ]
+}

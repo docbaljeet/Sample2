@@ -2,13 +2,10 @@
 #include "script_contexts.h"
 #include <stdexcept>
 
-// One thread_local pointer per script type.
-// Each is set before calling that script and cleared after.
 inline thread_local MortalityContext*  g_mortality_ctx  = nullptr;
 inline thread_local LapseContext*      g_lapse_ctx      = nullptr;
 inline thread_local EIACreditContext*  g_eia_credit_ctx = nullptr;
 
-// Accessors — one per script type.
 inline MortalityContext& active_mortality() {
     if (!g_mortality_ctx)
         throw std::runtime_error("mortality script: no active context");
@@ -27,7 +24,6 @@ inline EIACreditContext& active_eia_credit() {
     return *g_eia_credit_ctx;
 }
 
-// RAII guards — one per script type.
 struct MortalityGuard {
     MortalityGuard(MortalityContext& ctx) { g_mortality_ctx = &ctx; }
     ~MortalityGuard() { g_mortality_ctx = nullptr; }
