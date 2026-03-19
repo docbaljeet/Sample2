@@ -13,7 +13,7 @@ void ProjectionEngine::add_scenario(ScenarioData s) {
     scenarios_.push_back(std::move(s));
 }
 
-void ProjectionEngine::run(int projection_months, const ScriptHooks& hooks) {
+void ProjectionEngine::run(int projection_months, const HookRegistry& hooks) {
     for (const auto& pol : policies_) {
         for (const auto& scn : scenarios_) {
 
@@ -25,11 +25,7 @@ void ProjectionEngine::run(int projection_months, const ScriptHooks& hooks) {
             mort_ctx.smoker_status     = pol.smoker_status;
             mort_ctx.face_amount       = pol.face_amount;
 
-            if (!hooks.mortality.is_none()) {
-                // Pass as reference — Python writes directly to C++ memory
-                hooks.mortality(py::cast(mort_ctx,
-                    py::return_value_policy::reference));
-            }
+            hooks.call(Hook::Mortality, mort_ctx);
 
             // ── 2. Lapse ──────────────────────────────────────────
             LapseContext lapse_ctx;
@@ -37,10 +33,7 @@ void ProjectionEngine::run(int projection_months, const ScriptHooks& hooks) {
             lapse_ctx.policy_term_years = pol.term_years;
             lapse_ctx.premium           = pol.premium;
 
-            if (!hooks.lapse.is_none()) {
-                hooks.lapse(py::cast(lapse_ctx,
-                    py::return_value_policy::reference));
-            }
+            hooks.call(Hook::Lapse, lapse_ctx);
 
             // ── 3. EIA credited rate ──────────────────────────────
             EiaCreditContext eia_ctx;
@@ -51,10 +44,7 @@ void ProjectionEngine::run(int projection_months, const ScriptHooks& hooks) {
             eia_ctx.spread             = scn.spread;
             eia_ctx.index_returns      = scn.index_returns;
 
-            if (!hooks.eia_credit.is_none()) {
-                hooks.eia_credit(py::cast(eia_ctx,
-                    py::return_value_policy::reference));
-            }
+            hooks.call(Hook::EiaCredit, eia_ctx);
 
             // ── Fast inner loop — pure C++, no Python ─────────────
             // Direct struct field access — same as src_tls_vec.

@@ -1,6 +1,7 @@
 #include <pybind11/embed.h>
 #include <pybind11/stl.h>
 #include "script_contexts.h"
+#include "hook_registry.h"
 
 namespace py = pybind11;
 
@@ -29,7 +30,7 @@ struct HookDecorator {
 PYBIND11_EMBEDDED_MODULE(actuarial, m) {
     m.doc() = "Actuarial projection library — struct passing";
 
-    // ── Context structs (unchanged) ─────────────────────────────────
+    // ── Context structs ─────────────────────────────────────────────
     py::class_<MortalityContext>(m, "MortalityContext")
         .def(py::init<>())
         .def_readonly("projection_months", &MortalityContext::projection_months)
@@ -53,19 +54,17 @@ PYBIND11_EMBEDDED_MODULE(actuarial, m) {
         .def_readonly("cap_rate",           &EiaCreditContext::cap_rate)
         .def_readonly("floor_rate",         &EiaCreditContext::floor_rate)
         .def_readonly("spread",             &EiaCreditContext::spread)
-        .def_property_readonly("index_returns",
-            [](const EiaCreditContext& c) { return c.index_returns; })
+        .def_readwrite("index_returns",     &EiaCreditContext::index_returns)
         .def_readwrite("credited_rate",     &EiaCreditContext::credited_rate);
 
-    // ── Hook decorators ─────────────────────────────────────────────
+    // ── Hook decorators — driven by HOOK_TABLE ──────────────────────
     py::class_<HookDecorator>(m, "HookDecorator")
         .def(py::init<std::string>())
         .def_readonly("name", &HookDecorator::name)
         .def_readwrite("func", &HookDecorator::func)
         .def("__call__", &HookDecorator::operator());
 
-    // These are the only valid hook points — the engine's contract.
-    m.attr("mortality")  = HookDecorator("mortality");
-    m.attr("lapse")      = HookDecorator("lapse");
-    m.attr("eia_credit") = HookDecorator("eia_credit");
+    for (const auto& meta : HOOK_TABLE) {
+        m.attr(meta.name.data()) = HookDecorator(std::string(meta.name));
+    }
 }

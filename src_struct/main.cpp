@@ -49,10 +49,11 @@ int main() {
     }
 
     // ── Read registered hooks from decorator objects ────────────────
-    ScriptHooks hooks;
-    hooks.mortality  = actuarial.attr("mortality").attr("func");
-    hooks.lapse      = actuarial.attr("lapse").attr("func");
-    hooks.eia_credit = actuarial.attr("eia_credit").attr("func");
+    HookRegistry hooks;
+    for (const auto& meta : HOOK_TABLE) {
+        auto decorator = actuarial.attr(meta.name.data());
+        hooks.set(meta.id, decorator.attr("func"));
+    }
 
     // ── Set up model points ─────────────────────────────────────────
     ProjectionEngine engine;

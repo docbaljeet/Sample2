@@ -1,10 +1,6 @@
 #pragma once
-#include <pybind11/pytypes.h>
-#include <functional>
-#include <string>
 #include <vector>
-
-namespace py = pybind11;
+#include "hook_registry.h"
 
 // ── Policy and scenario data ──────────────────────────────────────────
 
@@ -27,22 +23,13 @@ struct ScenarioData {
     std::vector<double> index_returns;
 };
 
-// ── Script hooks — hold the Python callables directly ─────────────────
-// Each callable takes a context struct reference: calc(ctx)
-
-struct ScriptHooks {
-    py::object mortality;     // calc(MortalityContext)
-    py::object lapse;         // calc(LapseContext)
-    py::object eia_credit;    // calc(EiaCreditContext)
-};
-
 // ── Engine ────────────────────────────────────────────────────────────
 
 class ProjectionEngine {
 public:
     void add_policy(PolicyData p);
     void add_scenario(ScenarioData s);
-    void run(int projection_months, const ScriptHooks& hooks);
+    void run(int projection_months, const HookRegistry& hooks);
 
 private:
     std::vector<PolicyData>   policies_;
