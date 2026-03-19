@@ -186,7 +186,13 @@ add_executable(ActuarialModelStruct
 target_include_directories(ActuarialModelStruct PRIVATE src_struct)
 target_link_libraries(ActuarialModelStruct PRIVATE pybind11::embed)
 
-foreach(_script mortality_script_struct lapse_script_struct eia_credit_script_struct)
+# Pass the Python installation directory so the executable can set
+# PYTHONHOME at runtime — required for embedded Python on Windows/pyenv.
+get_filename_component(_py3_home "${Python3_EXECUTABLE}" DIRECTORY)
+target_compile_definitions(ActuarialModelStruct PRIVATE
+    PYTHON_HOME_PATH="${_py3_home}")
+
+foreach(_script mortality_script_struct lapse_script_struct eia_credit_script_struct assumptions actuarial)
     add_custom_command(TARGET ActuarialModelStruct POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_SOURCE_DIR}/scripts/${_script}.py"
@@ -194,6 +200,13 @@ foreach(_script mortality_script_struct lapse_script_struct eia_credit_script_st
         COMMENT "Copying ${_script}.py for ActuarialModelStruct"
     )
 endforeach()
+
+add_custom_command(TARGET ActuarialModelStruct POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/scripts/hooks_config.json"
+        "$<TARGET_FILE_DIR:ActuarialModelStruct>/hooks_config.json"
+    COMMENT "Copying hooks_config.json for ActuarialModelStruct"
+)
 
 # Copy python3XX.dll so the executable can find it without PATH tricks.
 get_target_property(_py3_loc Python3::Python IMPORTED_LOCATION_RELEASE)

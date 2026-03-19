@@ -1,43 +1,58 @@
 #include <pybind11/embed.h>
 #include <iostream>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+#ifdef _WIN32
+#  include <cstdlib>
+#endif
 #include "projection_engine.h"
 
 namespace py = pybind11;
 
 int main() {
+    // Set PYTHONHOME so the embedded interpreter can locate the stdlib.
+    // PYTHON_HOME_PATH is injected by CMake from Python3_EXECUTABLE's directory.
+#if defined(_WIN32) && defined(PYTHON_HOME_PATH)
+    _putenv_s("PYTHONHOME", PYTHON_HOME_PATH);
+#endif
+
     py::scoped_interpreter guard{};
 
     py::module_::import("sys").attr("path")
         .cast<py::list>().append(".");
 
-    // Import actuarial module to register context types for py::cast
-    py::module_::import("actuarial");
+    // Import actuarial module — registers context types + hook decorators
+    auto actuarial = py::module_::import("actuarial");
 
-    // ── Load each script ────────────────────────────────────────────
+    // ── Load client script name from JSON config ────────────────────
+    const char* config_path = "hooks_config.json";
+    std::ifstream ifs(config_path);
+    if (!ifs) {
+        std::cerr << "Cannot open " << config_path << "\n";
+        return 1;
+    }
+    std::ostringstream buf;
+    buf << ifs.rdbuf();
+
+    auto json_mod  = py::module_::import("json");
+    py::dict config = json_mod.attr("loads")(buf.str());
+    std::string script = config["script"].cast<std::string>();
+
+    // ── Import client script — decorators self-register ─────────────
+    try {
+        py::module_::import(script.c_str());
+        std::cout << "Loaded script: " << script << "\n";
+    } catch (const py::error_already_set& e) {
+        std::cerr << "Failed to load " << script << ": " << e.what() << "\n";
+        return 1;
+    }
+
+    // ── Read registered hooks from decorator objects ────────────────
     ScriptHooks hooks;
-
-    auto load_hook = [](const char* module_name,
-                        const char* func_name) -> py::object {
-        try {
-            auto mod = py::module_::import(module_name);
-            if (py::hasattr(mod, func_name)) {
-                std::cout << "Loaded " << module_name << "."
-                          << func_name << "()\n";
-                return mod.attr(func_name);
-            }
-            std::cout << "No " << func_name << "() in "
-                      << module_name << "\n";
-        } catch (const py::error_already_set& e) {
-            std::cerr << "Failed to load " << module_name
-                      << ": " << e.what() << "\n";
-        }
-        return py::none();
-    };
-
-    hooks.mortality  = load_hook("mortality_script_struct",  "calc");
-    hooks.lapse      = load_hook("lapse_script_struct",      "calc");
-    hooks.eia_credit = load_hook("eia_credit_script_struct", "calc");
+    hooks.mortality  = actuarial.attr("mortality").attr("func");
+    hooks.lapse      = actuarial.attr("lapse").attr("func");
+    hooks.eia_credit = actuarial.attr("eia_credit").attr("func");
 
     // ── Set up model points ─────────────────────────────────────────
     ProjectionEngine engine;
