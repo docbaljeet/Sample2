@@ -25,7 +25,7 @@ void ProjectionEngine::run(int projection_months, const HookRegistry& hooks) {
             mort_ctx.smoker_status     = pol.smoker_status;
             mort_ctx.face_amount       = pol.face_amount;
 
-            hooks.call(Hook::Mortality, mort_ctx);
+            hooks.call(Hook::Mortality, pol.mortality_table, mort_ctx);
 
             // ── 2. Lapse ──────────────────────────────────────────
             LapseContext lapse_ctx;
@@ -33,7 +33,7 @@ void ProjectionEngine::run(int projection_months, const HookRegistry& hooks) {
             lapse_ctx.policy_term_years = pol.term_years;
             lapse_ctx.premium           = pol.premium;
 
-            hooks.call(Hook::Lapse, lapse_ctx);
+            hooks.call(Hook::Lapse, pol.lapse_table, lapse_ctx);
 
             // ── 3. EIA credited rate ──────────────────────────────
             EiaCreditContext eia_ctx;
@@ -44,7 +44,7 @@ void ProjectionEngine::run(int projection_months, const HookRegistry& hooks) {
             eia_ctx.spread             = scn.spread;
             eia_ctx.index_returns      = scn.index_returns;
 
-            hooks.call(Hook::EiaCredit, eia_ctx);
+            hooks.call(Hook::EiaCredit, pol.eia_credit_table, eia_ctx);
 
             // ── Fast inner loop — pure C++, no Python ─────────────
             // Direct struct field access — same as src_tls_vec.

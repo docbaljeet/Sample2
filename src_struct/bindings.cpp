@@ -6,25 +6,17 @@
 namespace py = pybind11;
 
 // ── Hook decorator ──────────────────────────────────────────────────
-// Each instance (e.g. actuarial.mortality) is a callable decorator.
-// Client scripts use:  @actuarial.mortality
+// Each instance (e.g. actuarial.mortality) is a decorator factory.
+// Client scripts use:  @actuarial.mortality(name="Table1")
 //                      def calc(ctx): ...
-// The engine reads back:  actuarial.mortality.func
+// The engine reads back:  actuarial.mortality.funcs["Table1"]
 
 struct HookDecorator {
-    std::string name;
-    py::object  func;
+    std::string hook_name;
+    py::dict    funcs;           // name → callable
 
     explicit HookDecorator(std::string n)
-        : name(std::move(n)), func(py::none()) {}
-
-    py::object operator()(py::object fn) {
-        if (!func.is_none())
-            throw std::runtime_error(
-                "Hook '" + name + "' is already registered");
-        func = fn;
-        return fn;                       // pass-through so the def still works
-    }
+        : hook_name(std::move(n)) {}
 };
 
 PYBIND11_EMBEDDED_MODULE(actuarial, m) {
@@ -60,9 +52,20 @@ PYBIND11_EMBEDDED_MODULE(actuarial, m) {
     // ── Hook decorators — driven by HOOK_TABLE ──────────────────────
     py::class_<HookDecorator>(m, "HookDecorator")
         .def(py::init<std::string>())
-        .def_readonly("name", &HookDecorator::name)
-        .def_readwrite("func", &HookDecorator::func)
-        .def("__call__", &HookDecorator::operator());
+        .def_readonly("hook_name", &HookDecorator::hook_name)
+        .def_readonly("funcs",     &HookDecorator::funcs)
+        .def("__call__", [](py::object self_obj, const std::string& name) {
+            return py::cpp_function([self_obj, name](py::object fn) -> py::object {
+                auto& self = self_obj.cast<HookDecorator&>();
+                py::str key(name);
+                if (self.funcs.contains(key))
+                    throw std::runtime_error(
+                        "Hook '" + self.hook_name + "' already has '"
+                        + name + "' registered");
+                self.funcs[key] = fn;
+                return fn;
+            });
+        }, py::arg("name"));
 
     for (const auto& meta : HOOK_TABLE) {
         m.attr(meta.name.data()) = HookDecorator(std::string(meta.name));

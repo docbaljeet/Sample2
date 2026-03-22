@@ -12,6 +12,9 @@ struct PolicyData {
     int    term_years;
     int    gender;
     int    smoker_status;
+    std::string mortality_table;
+    std::string lapse_table;
+    std::string eia_credit_table;
 };
 
 struct ScenarioData {

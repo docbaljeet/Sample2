@@ -1,8 +1,11 @@
 #pragma once
 #include <pybind11/pytypes.h>
 #include <array>
+#include <unordered_map>
+#include <string>
 #include <cstddef>
 #include <string_view>
+#include <stdexcept>
 
 namespace py = pybind11;
 
@@ -27,25 +30,24 @@ inline constexpr std::array<HookMeta, static_cast<std::size_t>(Hook::Count)> HOO
     { Hook::EiaCredit,  "eia_credit" },
 }};
 
-// ── 3. Runtime storage — flat array, O(1) indexed by enum ──────
+// ── 3. Runtime storage — hook → name → callable ────────────────
 class HookRegistry {
 public:
-    void set(Hook h, py::object fn) {
-        slots_[static_cast<std::size_t>(h)] = std::move(fn);
-    }
-
-    const py::object& get(Hook h) const {
-        return slots_[static_cast<std::size_t>(h)];
+    void add(Hook h, const std::string& name, py::object fn) {
+        slots_[static_cast<std::size_t>(h)][name] = std::move(fn);
     }
 
     template <typename Ctx>
-    void call(Hook h, Ctx& ctx) const {
-        const auto& fn = slots_[static_cast<std::size_t>(h)];
-        if (!fn.is_none()) {
-            fn(py::cast(ctx, py::return_value_policy::reference));
-        }
+    void call(Hook h, const std::string& name, Ctx& ctx) const {
+        const auto& map = slots_[static_cast<std::size_t>(h)];
+        auto it = map.find(name);
+        if (it == map.end())
+            throw std::runtime_error(
+                "No function registered for hook '" + name + "'");
+        it->second(py::cast(ctx, py::return_value_policy::reference));
     }
 
 private:
-    std::array<py::object, static_cast<std::size_t>(Hook::Count)> slots_;
+    std::array<std::unordered_map<std::string, py::object>,
+               static_cast<std::size_t>(Hook::Count)> slots_;
 };

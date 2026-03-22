@@ -48,18 +48,23 @@ int main() {
         return 1;
     }
 
-    // ── Read registered hooks from decorator objects ────────────────
+    // ── Load all named functions into registry ─────────────────────
     HookRegistry hooks;
     for (const auto& meta : HOOK_TABLE) {
         auto decorator = actuarial.attr(meta.name.data());
-        hooks.set(meta.id, decorator.attr("func"));
+        py::dict funcs = decorator.attr("funcs");
+        for (auto& [key, fn] : funcs) {
+            std::string name = key.cast<std::string>();
+            hooks.add(meta.id, name, fn.cast<py::object>());
+            std::cout << "  " << meta.name << " -> " << name << "\n";
+        }
     }
 
     // ── Set up model points ─────────────────────────────────────────
     ProjectionEngine engine;
 
-    engine.add_policy({1, 100000.0, 500.0,  35, 20, 0, 0});
-    engine.add_policy({2, 250000.0, 1200.0, 45, 30, 1, 0});
+    engine.add_policy({1, 100000.0, 500.0,  35, 20, 0, 0, "Table1", "Standard", "ScenarioA"});
+    engine.add_policy({2, 250000.0, 1200.0, 45, 30, 1, 0, "Table1", "Standard", "ScenarioA"});
 
     int projection_months = 12;
     std::vector<double> idx_returns(projection_months);

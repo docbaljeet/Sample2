@@ -8,7 +8,7 @@ decorators defined by the C++ engine.
 import actuarial
 
 
-@actuarial.mortality
+@actuarial.mortality(name="Table1")
 def calc_mortality(ctx:actuarial.MortalityContext):
     rates = []
     for m in range(ctx.projection_months):
@@ -24,7 +24,7 @@ def calc_mortality(ctx:actuarial.MortalityContext):
     ctx.qx_monthly = rates
 
 
-@actuarial.lapse
+@actuarial.lapse(name="Standard")
 def calc_lapse(ctx):
     total_months = ctx.policy_term_years * 12
     rates = []
@@ -48,7 +48,7 @@ def calc_lapse(ctx):
     ctx.lapse_rate_monthly = rates
 
 
-@actuarial.eia_credit
+@actuarial.eia_credit(name="ScenarioA")
 def calc_eia_credit(ctx):
     rates = []
     for m in range(ctx.projection_months):
